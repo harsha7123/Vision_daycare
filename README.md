@@ -42,6 +42,22 @@ python run.py --source rtsp://... --profile production --host 0.0.0.0
 
 `--profile demo` (default) uses the short thresholds in `configs/rules.demo.yaml`. `--profile production` uses the blueprint values in `configs/rules.yaml`: 120 s phone, 180 s out of zone, 60 s unattended, and so on.
 
+### Web app: upload any video (Vercel + free backend)
+
+`web/` is a React app you can host on **Vercel**, backed by `run_cloud.py`, which runs free on **Hugging Face Spaces**. See **[DEPLOY.md](DEPLOY.md)** for step-by-step hosting and optional real phone calls (Twilio).
+
+* Drag in a video, optionally draw the play / nap / exit / staff-only areas on the first frame, and pick a sensitivity (short clips, demo, or real centre).
+* The server runs YOLO pose + phone detection + ByteTrack, auto-calibrates adult height from the video, and evaluates R1–R6.
+* The results play back on the original video with live overlays: boxes, skeletons, zones, phone timers, and in-browser face blur. A timeline shows alert markers and children/adults counts.
+* As playback reaches an alert, a banner and toast pop up. **Critical alerts call the parent**: a ringing call screen that reads the alert aloud (simulated), or a real phone call and SMS through Twilio.
+* You can fix who is a child, redraw zones, or change thresholds, then **Re-analyze** in seconds; YOLO doesn't need to run again.
+* **Watch a sample analysis** works offline, so the Vercel demo never depends on the backend being awake.
+
+```bash
+python run_cloud.py                  # API on http://localhost:7860/docs
+cd web && npm install && npm run dev # UI on http://localhost:5173
+```
+
 ---
 
 ## 2. Architecture
@@ -116,6 +132,9 @@ src/daycare/
 dashboard/          single-page admin UI (vanilla JS)
 training/           train_detector.py, train_role_cls.py, train_actions.py, data/daycare.yaml
 tests/              unit tests + replay test of the full scenario
+src/daycare/batch.py, cloud_api.py   uploaded-video analysis + cloud API for the web app
+web/                React web app (Vercel); web/public/sample = offline demo
+deploy/huggingface/ free backend hosting (Docker Space)
 docker/             Dockerfile.edge, compose.yaml (edge + optional MediaMTX relay)
 ```
 
