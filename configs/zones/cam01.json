@@ -1,0 +1,7 @@
+{
+  "coords": "normalized",
+  "zones": [
+    {"name": "Play area", "type": "play", "polygon": [[0.0, 0.0], [0.72, 0.0], [0.72, 1.0], [0.0, 1.0]]},
+    {"name": "Staff only", "type": "staff_only", "polygon": [[0.72, 0.0], [1.0, 0.0], [1.0, 1.0], [0.72, 1.0]]}
+  ]
+}

@@ -1,0 +1,23 @@
+# docker compose -f docker/compose.yaml up -d
+# Cameras stay on an isolated VLAN; publish 8000 only to localhost / VPN (Tailscale, WireGuard).
+services:
+  edge:
+    build: { context: .., dockerfile: docker/Dockerfile.edge }
+    restart: unless-stopped
+    env_file: [../.env]
+    ports: ["127.0.0.1:8000:8000"]
+    volumes:
+      - ../data:/data
+      - ../models:/app/models
+      - ../configs:/app/configs
+    deploy:
+      resources:
+        reservations:
+          devices: [{ driver: nvidia, count: all, capabilities: [gpu] }]
+
+  # Optional RTSP relay so several consumers can read one camera stream.
+  mediamtx:
+    image: bluenviron/mediamtx:latest
+    restart: unless-stopped
+    profiles: [relay]
+    ports: ["127.0.0.1:8554:8554"]

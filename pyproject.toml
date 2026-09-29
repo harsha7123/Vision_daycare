@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "daycare-monitor"
+version = "0.1.0"
+description = "Day-care caretaker attention monitor: YOLO + ByteTrack + rules + real-time alerts"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.24",
+    "opencv-python>=4.10",
+    "pyyaml>=6",
+    "fastapi>=0.110",
+    "uvicorn>=0.25",
+    "httpx>=0.25",
+    "python-multipart>=0.0.9",
+    "tzdata; platform_system == 'Windows'",
+]
+
+[project.optional-dependencies]
+vision = ["ultralytics>=8.3", "supervision>=0.22", "torch>=2.1"]
+fcm = ["firebase-admin>=6"]
+dev = ["pytest>=8"]
+
+[project.scripts]
+daycare = "daycare.main:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

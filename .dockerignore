@@ -1,0 +1,7 @@
+.git
+data
+runs
+models/*.pt
+models/*.engine
+.env
+**/__pycache__

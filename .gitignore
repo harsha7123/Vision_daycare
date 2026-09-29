@@ -1,0 +1,19 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+.pytest_cache/
+.claude/
+
+# runtime data: events, snapshots, clips, uploads (privacy: never commit footage)
+/data/
+/runs/
+
+# model weights are tracked with DVC / a model registry, not git
+models/*
+!models/README.md
+*.pt
+*.engine
+*.onnx

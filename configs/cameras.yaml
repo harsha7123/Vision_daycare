@@ -1,0 +1,36 @@
+# Edge-box configuration. `python -m daycare --source ...` overrides the first camera's source.
+device: auto               # auto | cpu | cuda:0
+public_base_url: http://localhost:8000
+
+models:
+  pose: models/yolo11n-pose.pt     # persons + 17 COCO keypoints (auto-downloaded)
+  detector: models/yolo11s.pt      # COCO class 67 = cell phone (auto-downloaded)
+  role_classifier: models/role_cls.pt   # optional YOLO-cls (adult/child); used if the file exists
+  action: models/pose_gru.pt            # optional keypoint GRU; used if the file exists
+
+perception:
+  imgsz: 640
+  det_imgsz: 640            # raise to 960 for small / distant phones
+  person_conf: 0.35
+  phone_conf: 0.25
+  tracker: configs/bytetrack.yaml
+  max_width: 1280           # frames are downscaled to this width before processing
+
+privacy:
+  blur_snapshots: true      # faces blurred on snapshots that can be shared with parents
+  retention_days: 30
+
+storage:
+  dir: data
+
+cameras:
+  - id: cam01
+    room: Toddlers A
+    source: sim             # "sim" | webcam index (0) | path/to/video.mp4 | rtsp://...
+    fps: 12
+    zones: configs/zones/cam01.json
+    role:
+      mode: auto            # auto | all_adult | all_child (dashboard overrides always win)
+      child_height_ratio: 0.7
+      # Ground-plane scale: [feet_y, adult_height] as fractions of frame height, at two floor positions.
+      calibration: { near: [1.0, 0.42], far: [0.3, 0.24] }

@@ -1,0 +1,9 @@
+# ByteTrack parameters (Ultralytics tracker format).
+# track_buffer ~3 s at 12 fps so brief occlusion by furniture keeps the same ID.
+tracker_type: bytetrack
+track_high_thresh: 0.25
+track_low_thresh: 0.1
+new_track_thresh: 0.25
+track_buffer: 36
+match_thresh: 0.8
+fuse_score: True

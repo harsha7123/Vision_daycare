@@ -1,0 +1,18 @@
+# Edge box image: CUDA + PyTorch + Ultralytics base, plus this project.
+# Jetson: swap the base for ultralytics/ultralytics:latest-jetson-jetpack6
+FROM ultralytics/ultralytics:latest
+
+WORKDIR /app
+RUN pip install --no-cache-dir "supervision>=0.22" "fastapi>=0.110" "uvicorn>=0.25" "httpx>=0.25" \
+        "python-multipart>=0.0.9" "pyyaml>=6"
+COPY src/ src/
+COPY configs/ configs/
+COPY dashboard/ dashboard/
+COPY training/ training/
+COPY run.py .
+
+ENV DAYCARE_DATA_DIR=/data PYTHONUNBUFFERED=1
+VOLUME ["/data", "/app/models"]
+EXPOSE 8000
+HEALTHCHECK --interval=30s --timeout=5s CMD python -c "import urllib.request;urllib.request.urlopen('http://localhost:8000/api/health')" || exit 1
+CMD ["python", "run.py", "--host", "0.0.0.0", "--profile", "production"]

@@ -1,0 +1,10 @@
+# Lightweight set for tests / CI: rules, sim replay and API run without torch or YOLO.
+numpy>=1.24
+opencv-python-headless>=4.10
+pyyaml>=6
+fastapi>=0.110
+uvicorn>=0.25
+httpx>=0.25
+python-multipart>=0.0.9
+tzdata
+pytest>=8

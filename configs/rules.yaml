@@ -1,0 +1,30 @@
+# Production thresholds (blueprint section 6). Tune per centre during shadow mode.
+rules:
+  R1_phone_use:  { enabled: true,  threshold_s: 120, window_s: 150, enter: 0.6, exit: 0.4, cooldown_s: 600, priority: high }
+  R2_left_zone:  { enabled: true,  threshold_s: 180, cooldown_s: 600, priority: medium }
+  R3_unattended: { enabled: true,  threshold_s: 60,  cooldown_s: 300, priority: critical }
+  R4_ratio:      { enabled: true,  max_children_per_adult: 8, threshold_s: 120, cooldown_s: 600, priority: medium }
+  R5_fall:       { enabled: true,  threshold_s: 30, model: heuristic, min_conf: 0.7, cooldown_s: 300, priority: critical }
+  R6_idle:       { enabled: false, threshold_s: 300, max_motion: 0.03, cooldown_s: 900, priority: low }
+
+phone:
+  ema_alpha: 0.2          # EMA per processed frame
+  conf_full: 0.5          # phone detector confidence treated as "certain"
+  hand_k: 0.6             # phone centre within k * shoulder width of a wrist
+  face_k: 1.0             # phone centre within k * shoulder width of the nose (call posture)
+  no_phone_score: 0.4     # weaker posture-only signal (wrists together + head down)
+
+tracking:
+  presence_grace_s: 1.0   # a track still counts as present this long after its last detection
+  forget_after_s: 10      # drop per-track state after this long unseen
+  max_dt_s: 1.0           # clamp timer increments after stalls
+
+schedule:
+  active_hours: "08:00-18:30"
+  nap_hours: null         # e.g. "13:00-14:30"
+  timezone: "Asia/Kolkata"
+  skip_zones_during_nap: [play]
+
+escalation:
+  unacknowledged_after_s: 120
+  escalate_to: [centre_owner]

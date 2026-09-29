@@ -1,0 +1,26 @@
+# Alert channels. Secrets come from environment variables (or a .env file), never from git.
+# "auto" enables a channel only when its environment variables are set.
+channels:
+  console: { enabled: true }
+  telegram:
+    enabled: auto
+    bot_token_env: TELEGRAM_BOT_TOKEN
+    chats:                      # audience -> env var holding the chat id
+      admin: TELEGRAM_ADMIN_CHAT_ID
+      parents: TELEGRAM_PARENTS_CHAT_ID
+      centre_owner: TELEGRAM_OWNER_CHAT_ID
+  webhook:
+    enabled: auto
+    url_env: WEBHOOK_URL
+    secret_env: WEBHOOK_SECRET  # HMAC-SHA256 signature in X-Daycare-Signature
+  fcm:
+    enabled: auto
+    credentials_env: GOOGLE_APPLICATION_CREDENTIALS
+    topic_prefix: centre
+
+# Who gets what (blueprint section 8).
+routing:
+  critical: [admin, parents]
+  high: [admin]
+  medium: [admin]
+  low: [admin]

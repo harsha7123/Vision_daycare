@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vision Daycare Monitor</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path fill="currentColor" d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5Zm0 12.5a5 5 0 1 1 0-10 5 5 0 0 1 0 10Zm0-8a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z"/></svg>
+    <div>
+      <div class="brand-name">Vision Daycare</div>
+      <div class="brand-sub">Caretaker attention monitor</div>
+    </div>
+  </div>
+  <nav class="tabs" role="tablist">
+    <button class="tab active" data-tab="live">Live</button>
+    <button class="tab" data-tab="events">Events</button>
+    <button class="tab" data-tab="rules">Rules</button>
+    <button class="tab" data-tab="how">How it works</button>
+  </nav>
+  <div class="pills" id="pills"></div>
+</header>
+
+<main>
+  <!-- LIVE -->
+  <section class="view active" id="view-live">
+    <div class="grid">
+      <div class="col-main">
+        <div class="card">
+          <div class="card-head">
+            <div class="title-row">
+              <select id="camera-select" aria-label="Camera"></select>
+              <span class="muted" id="source-label"></span>
+            </div>
+            <div class="toolbar">
+              <select id="source-select" aria-label="Video source">
+                <option value="sim">Simulated scene</option>
+                <option value="0">Webcam 0</option>
+                <option value="1">Webcam 1</option>
+                <option value="__rtsp">RTSP / HTTP URL...</option>
+                <option value="__upload">Upload video...</option>
+              </select>
+              <input type="file" id="upload-input" accept="video/*,image/*" hidden>
+              <button class="btn" id="btn-pose" aria-pressed="true">Pose</button>
+              <button class="btn" id="btn-zones">Edit zones</button>
+            </div>
+          </div>
+          <div class="stage" id="stage">
+            <img id="live" alt="Live annotated camera feed">
+            <canvas id="zone-canvas" hidden></canvas>
+            <div class="stage-msg" id="stage-msg" hidden></div>
+          </div>
+          <div class="zone-panel" id="zone-panel" hidden>
+            <div class="zone-help">Pick a type, click <b>Add zone</b>, click points on the frame, then <b>Finish</b>. Feet position decides membership.</div>
+            <div class="zone-controls">
+              <select id="zone-type">
+                <option value="play">play (child zone)</option>
+                <option value="nap">nap</option>
+                <option value="exit">exit / door</option>
+                <option value="staff_only">staff only</option>
+              </select>
+              <input id="zone-name" placeholder="Zone name">
+              <button class="btn" id="zone-add">Add zone</button>
+              <button class="btn" id="zone-finish" disabled>Finish</button>
+              <button class="btn primary" id="zone-save">Save zones</button>
+              <button class="btn ghost" id="zone-cancel">Cancel</button>
+            </div>
+            <ul class="zone-list" id="zone-list"></ul>
+          </div>
+        </div>
+
+        <div class="kpis" id="kpis"></div>
+
+        <div class="card">
+          <div class="card-head"><h2>Tracked people</h2><span class="muted">Enrol staff or correct a role; overrides win over the classifier.</span></div>
+          <div class="table-wrap">
+            <table class="table" id="tracks">
+              <thead><tr><th>ID</th><th>Role</th><th>Zones</th><th>Phone</th><th>Timers</th><th>Set role</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <aside class="col-side">
+        <div class="card feed-card">
+          <div class="card-head">
+            <h2>Live alerts</h2>
+            <label class="switch"><input type="checkbox" id="sound" checked> sound</label>
+          </div>
+          <div id="feed" class="feed"><div class="empty">No alerts yet. In the simulated scene the first alert fires at about 20 s.</div></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h2>Deliveries</h2></div>
+          <ul class="deliveries" id="deliveries"></ul>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- EVENTS -->
+  <section class="view" id="view-events">
+    <div class="card">
+      <div class="card-head">
+        <h2>Event history</h2>
+        <div class="toolbar">
+          <select id="f-rule"><option value="">All rules</option></select>
+          <select id="f-priority"><option value="">All priorities</option><option>critical</option><option>high</option><option>medium</option><option>low</option></select>
+          <label class="switch"><input type="checkbox" id="f-unacked"> unacknowledged only</label>
+          <button class="btn" id="f-refresh">Refresh</button>
+        </div>
+      </div>
+      <div class="stats" id="stats"></div>
+      <div class="table-wrap">
+        <table class="table" id="events">
+          <thead><tr><th></th><th>Time</th><th>Rule</th><th>Priority</th><th>Camera</th><th>Duration</th><th>Kids / adults</th><th>Conf.</th><th>Status</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- RULES -->
+  <section class="view" id="view-rules">
+    <div class="card">
+      <div class="card-head"><h2>Alert rules</h2><span class="muted" id="rules-profile"></span></div>
+      <p class="muted pad">Changes apply immediately to every camera (in memory). Persist them in <code>configs/rules.yaml</code> after shadow-mode tuning.</p>
+      <div class="rules" id="rules"></div>
+    </div>
+  </section>
+
+  <!-- HOW -->
+  <section class="view" id="view-how">
+    <div class="card pad">
+      <h2>Runtime workflow (every processed frame)</h2>
+      <ol class="flow">
+        <li><b>Grab frame</b><span>RTSP / webcam / file, sampled to 10-15 fps, 15 s ring buffer</span></li>
+        <li><b>Detect</b><span>YOLO pose: persons + 17 keypoints. YOLO detect: cell phones</span></li>
+        <li><b>Track</b><span>ByteTrack gives stable IDs across frames and occlusions</span></li>
+        <li><b>Classify role</b><span>Adult / child: classifier, height and proportions, then a per-track vote</span></li>
+        <li><b>Associate phone</b><span>Phone near a wrist and head pitched toward it. A phone on a table doesn't count</span></li>
+        <li><b>Update state</b><span>Zone by feet position, EMA-smoothed phone score, per-track timers</span></li>
+        <li><b>Evaluate rules</b><span>R1-R6 thresholds with hysteresis and cooldowns</span></li>
+        <li><b>Emit event</b><span>Face-blurred snapshot + clip, stored, then Telegram / FCM / webhook</span></li>
+      </ol>
+      <h2>Rules</h2>
+      <div class="table-wrap">
+        <table class="table">
+          <thead><tr><th>ID</th><th>Rule</th><th>Trigger</th><th>Priority</th></tr></thead>
+          <tbody id="rule-doc"></tbody>
+        </table>
+      </div>
+      <h2>Privacy by design</h2>
+      <ul class="bullets">
+        <li>All video is processed on the on-premise edge box; only events leave the building.</li>
+        <li>Faces are blurred on every snapshot; clips are for authorised admins only.</li>
+        <li>No facial recognition or identity profiling, only the roles adult / child.</li>
+        <li>Events are deleted automatically after the retention period (30 days by default).</li>
+        <li>A human reviews every alert. The system supports supervision; it doesn't decide discipline.</li>
+      </ul>
+    </div>
+  </section>
+</main>
+
+<dialog id="modal">
+  <div class="modal-body">
+    <button class="btn ghost close" id="modal-close" aria-label="Close">&times;</button>
+    <div id="modal-content"></div>
+  </div>
+</dialog>
+<div id="toasts" class="toasts" aria-live="polite"></div>
+<script src="/static/app.js"></script>
+</body>
+</html>

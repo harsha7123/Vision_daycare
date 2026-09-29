@@ -1,0 +1,10 @@
+# YOLO dataset config for the fine-tuned detector (export from CVAT / Label Studio in YOLO format).
+# Keep `test` from a different day AND camera than `train` to measure real generalisation.
+path: ../../data/datasets/daycare
+train: images/train
+val: images/val
+test: images/test
+names:
+  0: adult
+  1: child
+  2: cell_phone

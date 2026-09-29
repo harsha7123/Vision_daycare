@@ -1,0 +1,15 @@
+# Demo profile: deep-merged over rules.yaml with short thresholds so every rule
+# can be shown to a client within a couple of minutes. Never use in production.
+rules:
+  R1_phone_use:  { threshold_s: 12, window_s: 16, cooldown_s: 60 }
+  R2_left_zone:  { threshold_s: 15, cooldown_s: 60 }
+  R3_unattended: { threshold_s: 8,  cooldown_s: 45 }
+  R4_ratio:      { max_children_per_adult: 4, threshold_s: 8, cooldown_s: 60 }
+  R5_fall:       { threshold_s: 4,  cooldown_s: 45 }
+  R6_idle:       { enabled: true, threshold_s: 20, cooldown_s: 90 }
+
+schedule:
+  active_hours: "00:00-23:59"
+
+escalation:
+  unacknowledged_after_s: 45

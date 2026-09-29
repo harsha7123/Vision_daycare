@@ -1,0 +1,13 @@
+# Full edge-box install (CPU torch by default; see README for CUDA / Jetson).
+numpy>=1.24
+opencv-python>=4.10
+pyyaml>=6
+fastapi>=0.110
+uvicorn>=0.25
+httpx>=0.25
+python-multipart>=0.0.9
+tzdata; platform_system == "Windows"
+ultralytics>=8.3
+supervision>=0.22
+torch>=2.1
+# optional: firebase-admin>=6   (FCM push)
