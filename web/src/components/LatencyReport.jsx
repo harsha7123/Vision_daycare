@@ -11,7 +11,12 @@ const ms = (v) => (v == null ? "-" : `${Math.round(v)} ms`);
 
 /** Summarise per-frame timings collected by the Live screen into a report object. */
 export function buildReport(metrics) {
-  const f = metrics.frames.filter((x) => x.render != null);
+  // Skip the warm-up: the first frames include loading the AI models onto the GPU (seconds, once).
+  const all = metrics.frames.filter((x) => x.render != null);
+  const t0 = all.length ? all[0].at : 0;
+  const isWarm = (x) => x.at - t0 < 3000 || x.infer > 1000;
+  const warmFrames = all.filter(isWarm);
+  const f = all.filter((x) => !isWarm(x));
   const col = (k) => f.map((x) => x[k]);
   const stats = (k) => ({ median: pct(col(k), 50), p95: pct(col(k), 95), min: f.length ? Math.min(...col(k)) : null, max: f.length ? Math.max(...col(k)) : null, avg: avg(col(k)) });
   const dur = f.length > 1 ? (f[f.length - 1].at - f[0].at) / 1000 : 0;
@@ -23,6 +28,8 @@ export function buildReport(metrics) {
     resolution: metrics.resolution,
     duration_s: Math.round(dur),
     frames: f.length,
+    warmup_frames_excluded: warmFrames.length,
+    warmup_max_ms: warmFrames.length ? Math.round(Math.max(...warmFrames.map((x) => x.e2e))) : 0,
     fps: dur ? +(f.length / dur).toFixed(1) : 0,
     end_to_end: stats("e2e"),
     breakdown: { encode: stats("encode"), network: stats("network"), decode: stats("decode"), ai: stats("infer"), rules_and_reply: stats("other"), render: stats("render") },
@@ -62,7 +69,8 @@ export default function LatencyReport({ report, framesCsv, onClose }) {
         </div>
         <div className="report-body">
           <div className="report-meta small muted">
-            {new Date(report.generated_at).toLocaleString()} · {report.source} · {report.resolution} sent · {report.duration_s} s · {report.frames} frames<br />
+            {new Date(report.generated_at).toLocaleString()} · {report.source} · {report.resolution} sent · {report.duration_s} s · {report.frames} frames
+            {report.warmup_frames_excluded ? ` (first ${report.warmup_frames_excluded} warm-up frames excluded while the models loaded, up to ${Math.round(report.warmup_max_ms / 100) / 10} s)` : ""}<br />
             Server: <b>{report.server.gpu || report.server.device || "unknown"}</b> ({report.server.device}) · models {report.server.models?.pose?.split("/").pop()} + {report.server.models?.detector?.split("/").pop()}
           </div>
 
@@ -97,7 +105,7 @@ export default function LatencyReport({ report, framesCsv, onClose }) {
           <h3>Alerts: how long until the alert appeared</h3>
           {report.alerts.length ? (
             <table className="rtable">
-              <thead><tr><th>Time</th><th>Alert</th><th>Rule waits</th><th>Measured</th><th>System delay</th></tr></thead>
+              <thead><tr><th>Time</th><th>Alert</th><th>Rule waits</th><th>Measured</th><th>System delay</th><th></th></tr></thead>
               <tbody>
                 {report.alerts.map((a, i) => (
                   <tr key={i}>
@@ -106,6 +114,7 @@ export default function LatencyReport({ report, framesCsv, onClose }) {
                     <td className="num">{a.threshold_s != null ? `${a.threshold_s} s` : "-"}</td>
                     <td className="num">{a.from_detection_s != null ? `${a.from_detection_s.toFixed(1)} s` : "-"}</td>
                     <td className="num">{ms(a.system_ms)}</td>
+                    <td className="muted small">{a.repeat ? `repeat, after the ${a.cooldown_s} s cooldown` : "first alert"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -113,14 +122,14 @@ export default function LatencyReport({ report, framesCsv, onClose }) {
           ) : <p className="muted small">No alerts in this session. Hold a phone and look at it until the phone meter fills up to measure alert delay.</p>}
           <p className="muted small">
             <b>Rule waits</b> is the deliberate waiting time (e.g. 6 s on the phone before alerting). <b>Measured</b> is from the moment the
-            behaviour was first detected to the alert on screen. <b>System delay</b> is the end-to-end delay of the frame that triggered it.
+            behaviour was first detected (for a repeat alert: from the end of the cooldown) to the alert on screen. <b>System delay</b> is the end-to-end delay of the frame that triggered it.
             Camera hardware adds another ~30-100 ms before the browser receives a frame; browsers can't measure that part.
           </p>
         </div>
         <div className="call-actions no-print" style={{ padding: "0 20px 18px", justifyContent: "flex-end" }}>
           <button className="btn" onClick={() => download(`latency-report-${stamp}.json`, JSON.stringify(report, null, 2), "application/json")}>Download JSON</button>
           <button className="btn" onClick={() => download(`latency-frames-${stamp}.csv`, framesCsv, "text/csv")}>Download per-frame CSV</button>
-          <button className="btn primary" onClick={() => window.print()}>Print / save as PDF</button>
+          <button className="btn primary" onClick={() => { document.body.classList.add("printing-report"); window.print(); document.body.classList.remove("printing-report"); }}>Print / save as PDF</button>
         </div>
       </div>
     </div>

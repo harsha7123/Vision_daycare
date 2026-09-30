@@ -153,8 +153,13 @@ export default function Live({ opts, setOpts, onEvent, onCall, calledIds, autoCa
     setNow(m.t);
     for (const e of m.events) {
       const full = { ...e, room: e.room || "Live camera" };
-      const start = e.rule === "R1_phone_use" ? M.phoneStart[e.track_id] : Date.now() - e.duration_s * 1000;
+      // repeat alerts are measured from the end of the previous alert's cooldown, not from first detection
+      const cooldown = M.rules?.[e.rule]?.cooldown_s ?? 0;
+      const prev = [...M.alerts].reverse().find((a) => a.rule === e.rule && a.track_id === e.track_id);
+      const first = e.rule === "R1_phone_use" ? M.phoneStart[e.track_id] : Date.now() - e.duration_s * 1000;
+      const start = prev ? Math.max(first || 0, prev.at + cooldown * 1000) : first;
       M.alerts.push({ at: Date.now(), rule: e.rule, priority: e.priority, track_id: e.track_id,
+        repeat: !!prev, cooldown_s: cooldown,
         threshold_s: M.rules?.[e.rule]?.threshold_s, from_detection_s: start ? (Date.now() - start) / 1000 : null,
         system_ms: Math.round(t - L.capturedAt) });
       setEvents((es) => [full, ...es].slice(0, 50));
