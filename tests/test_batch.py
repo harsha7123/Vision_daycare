@@ -90,6 +90,7 @@ def test_snapshots_written(tmp_path, det):
 def client(tmp_path, monkeypatch):
     import daycare.cloud_api as ca
     monkeypatch.setattr(ca, "DATA", tmp_path / "jobs")
+    monkeypatch.setattr(ca, "LIVE_DATA", tmp_path / "live")
     return TestClient(ca.create_app())
 
 
