@@ -1,0 +1,28 @@
+# docker compose -f deploy/ec2/compose.yaml up -d --build      (run from the repo root; setup.sh does this)
+services:
+  api:
+    build: { context: ../.., dockerfile: deploy/ec2/Dockerfile }
+    restart: unless-stopped
+    env_file: [../../.env]
+    volumes: ["vd-data:/data"]
+    deploy:
+      resources:
+        reservations:
+          devices: [{ driver: nvidia, count: all, capabilities: [gpu] }]
+    expose: ["7860"]
+
+  # HTTPS in front of the API. Browsers only allow the camera and wss:// from https pages,
+  # so the backend must be https too. Caddy gets a free Let's Encrypt certificate automatically.
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    environment: ["DOMAIN=${DOMAIN}"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+    depends_on: [api]
+
+volumes:
+  vd-data:
+  caddy-data:

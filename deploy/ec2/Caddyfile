@@ -1,0 +1,7 @@
+{$DOMAIN} {
+	encode gzip
+	# WebSockets (/ws/live) are proxied automatically
+	reverse_proxy api:7860 {
+		flush_interval -1
+	}
+}

@@ -1,5 +1,7 @@
 # Deploying the web app for free
 
+> **Have an AWS account with GPU access?** For the lowest latency and best accuracy (live camera at 8–12 fps, bigger models), follow **[deploy/ec2/README.md](deploy/ec2/README.md)** instead of section 1 below. The Vercel frontend steps are the same.
+
 ```
  Browser ──► Vercel (web/, static React app, free) ──► Hugging Face Space (analysis API, free CPU)
                                                          └─► Twilio (optional real calls / SMS)

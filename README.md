@@ -51,6 +51,7 @@ python run.py --source rtsp://... --profile production --host 0.0.0.0
 * The results play back on the original video with live overlays: boxes, skeletons, zones, phone timers, and in-browser face blur. A timeline shows alert markers and children/adults counts.
 * As playback reaches an alert, a banner and toast pop up. **Critical alerts call the parent**: a ringing call screen that reads the alert aloud (simulated), or a real phone call and SMS through Twilio.
 * You can fix who is a child, redraw zones, or change thresholds, then **Re-analyze** in seconds; YOLO doesn't need to run again.
+* **Live camera:** real-time detection from the laptop camera (or a video file played as a camera), streamed to the server over a WebSocket. It shows round-trip and AI time, and a phone-use meter, and critical alerts call the parent. Host it on a GPU for 8–12 fps: [deploy/ec2/README.md](deploy/ec2/README.md).
 * **Watch a sample analysis** works offline, so the Vercel demo never depends on the backend being awake.
 
 ```bash

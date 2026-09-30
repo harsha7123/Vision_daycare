@@ -116,10 +116,14 @@ export function drawOverlay(ctx, video, canvas, result, t, opts) {
   const r = contentRect(video, canvas);
   const dpr = window.devicePixelRatio || 1;
   const scale = dpr * Math.max(0.85, Math.min(1.4, r.w / dpr / 900));
-  const sx = r.w / result.video.width, sy = r.h / result.video.height;
   if (opts.zones) drawZones(ctx, result.zones, r, scale);
   const f = frameAt(result.frames, t, result.video.sample_fps);
-  if (!f) return;
+  if (f) drawFrame(ctx, video, r, scale, f, result.video.width, result.video.height, opts);
+}
+
+/** Draw one analysed frame (boxes, skeletons, labels, phones, face blur) into content rect r. */
+export function drawFrame(ctx, video, r, scale, f, width, height, opts) {
+  const sx = r.w / width, sy = r.h / height;
   const roleOf = opts.roleOverrides || {};
 
   f.p.forEach((p, i) => {

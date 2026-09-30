@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import CallModal from "./components/CallModal";
 import Controls, { Icon } from "./components/Controls";
+import Live from "./components/Live";
 import { AlertsPanel, PeoplePanel, PriorityTag, RulesPanel } from "./components/Panels";
 import SettingsDrawer, { DEFAULT_SETTINGS } from "./components/SettingsDrawer";
 import Timeline from "./components/Timeline";
@@ -211,9 +212,17 @@ export default function App() {
     }
     videoRef.current?.pause();
     const mode = settings.mode === "real" && serverCfg?.notify?.twilio ? "real" : "simulated";
-    setCall({ contact, event: { ...e, room: result?.room || room }, mode });
+    setCall({ contact, event: { ...e, room: e.room || result?.room || room }, mode });
     setCalled((s) => new Set(s).add(e.event_id));
   }, [settings, serverCfg, result, room, toast]);
+
+  const onLiveEvent = useCallback((e) => {
+    alertBeep(e.priority);
+    const auto = settings.autoCall?.[e.priority];
+    toast({ priority: e.priority, title: RULES[e.rule]?.title || e.title, text: `Live camera${auto ? " · calling the parent..." : ""}`,
+      action: auto ? null : { label: "Call parent", fn: () => startCall(e) } });
+    if (auto) startCall(e);
+  }, [settings, toast, startCall]);
 
   /* ---------------- playback & live alerts ---------------- */
   const live = useRef({});
@@ -323,7 +332,8 @@ export default function App() {
       </header>
 
       <main>
-        {stage === "upload" && <Upload onFile={onFile} onSample={onSample} limits={serverCfg?.limits} serverOk={serverOk} />}
+        {stage === "upload" && <Upload onFile={onFile} onSample={onSample} onLive={() => setStage("live")} limits={serverCfg?.limits} serverOk={serverOk} />}
+        {stage === "live" && <Live opts={opts} setOpts={setOpts} onEvent={onLiveEvent} onCall={startCall} calledIds={called} />}
 
         {(stage === "setup" || stage === "processing") && (
           <div className="layout">

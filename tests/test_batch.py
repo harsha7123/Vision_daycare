@@ -140,3 +140,58 @@ def test_warns_when_no_people_are_detected():
     assert res["events"] == [] and res["summary"]["warning"] == "no_people"
     ok = analyze(sim_detections(seconds=10), build_rules("quick"))
     assert "warning" not in ok["summary"]
+
+
+# ---- live WebSocket ----------------------------------------------------------------------------------
+class FakePerception:
+    """Stands in for YOLO: returns the simulator's people for successive scene times."""
+    device = "cpu"
+
+    def __init__(self, start=8.0, fps=10):
+        self.sim, self.t, self.dt = SimScene(), start, 1 / fps
+
+    def reset(self):
+        pass
+
+    def __call__(self, frame):
+        _, persons, phones = self.sim.render(self.t)
+        self.t += self.dt
+        return persons, phones
+
+
+def test_live_session_flags_phone_use(client, monkeypatch):
+    import daycare.cloud_api as ca
+    monkeypatch.setattr(ca, "make_perception", lambda: FakePerception())
+    jpg = cv2.imencode(".jpg", np.zeros((360, 640, 3), np.uint8))[1].tobytes()
+    events = []
+    with client.websocket_connect("/ws/live?preset=quick") as ws:
+        hello = ws.receive_json()
+        assert hello["type"] == "hello" and hello["rules"]["R1_phone_use"]["threshold_s"] == 6
+        ws.send_text(json.dumps({"type": "role", "track_id": 3, "role": "child"}))
+        assert ws.receive_json() == {"type": "ack", "for": "role"}
+        t0 = __import__("time").time()
+        for _ in range(400):
+            ws.send_bytes(jpg)
+            out = ws.receive_json()
+            assert out["type"] == "frame" and len(out["p"]) >= 7
+            events += out["events"]
+            if any(e["rule"] == "R1_phone_use" for e in events):
+                break
+            __import__("time").sleep(0.02)
+        ws.send_text("{bad json")
+        assert ws.receive_json()["type"] == "error"
+    r1 = [e for e in events if e["rule"] == "R1_phone_use"]
+    assert r1 and r1[0]["track_id"] == 1, "phone use should be flagged for the caretaker on the phone"
+    assert client.get(r1[0]["snapshot"]).status_code == 200
+    assert client.get("/api/health").json()["live_sessions"] == 0      # model returned to the pool
+
+
+def test_live_rejects_foreign_origin(tmp_path, monkeypatch):
+    import daycare.cloud_api as ca
+    monkeypatch.setattr(ca, "DATA", tmp_path / "jobs")
+    monkeypatch.setenv("ALLOWED_ORIGINS", "https://good.example")
+    c = TestClient(ca.create_app())
+    from starlette.websockets import WebSocketDisconnect
+    with pytest.raises(WebSocketDisconnect):
+        with c.websocket_connect("/ws/live", headers={"origin": "https://evil.example"}) as ws:
+            ws.receive_json()

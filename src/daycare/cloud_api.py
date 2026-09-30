@@ -11,6 +11,7 @@ Environment:
   SAMPLE_FPS             default 6            JOB_TTL_S     default 3600 (uploads + results deleted after)
   JOBS_PER_HOUR          per-IP upload limit, default 8
   DAYCARE_DEVICE         auto | cpu | cuda:0
+  POSE_MODEL / DET_MODEL YOLO weights (bigger = more accurate, needs a GPU); MAX_LIVE live sessions, default 4
   TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN / TWILIO_FROM_NUMBER    enable real calls + SMS
   ALLOWED_CALL_NUMBERS   comma-separated E.164 numbers that may be called (required for real calls)
 """
@@ -29,8 +30,10 @@ from collections import defaultdict, deque
 from pathlib import Path
 from xml.sax.saxutils import escape
 
+import asyncio
+
 import httpx
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
@@ -38,6 +41,7 @@ from pydantic import BaseModel, Field
 from . import __version__
 from .batch import PRESETS, analyze, build_rules, detect, estimate_calibration, probe, render_snapshots
 from .config import load_dotenv, resolve
+from .live import LiveSession
 
 load_dotenv()
 log = logging.getLogger("daycare.cloud")
@@ -50,6 +54,8 @@ SAMPLE_FPS = float(ENV("SAMPLE_FPS", 6))
 JOB_TTL_S = float(ENV("JOB_TTL_S", 3600))
 JOBS_PER_HOUR = int(ENV("JOBS_PER_HOUR", 8))
 DATA = Path(ENV("DAYCARE_DATA_DIR") or resolve("data")) / "jobs"
+LIVE_DATA = DATA.parent / "live"
+MAX_LIVE = int(ENV("MAX_LIVE", 4))           # concurrent live camera sessions (one model set each)
 VIDEO_EXT = {".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v", ".mpeg", ".mpg"}
 E164 = re.compile(r"^\+[1-9]\d{6,14}$")
 
@@ -95,6 +101,46 @@ class Job:
                 "processing_s": round((self.finished or time.time()) - self.started, 1) if self.started else None}
 
 
+def make_perception():
+    """YOLO pose + phone detector + ByteTrack. Models are chosen with env vars so a GPU server
+    can use bigger, more accurate ones (e.g. POSE_MODEL=models/yolo11s-pose.pt DET_MODEL=models/yolo11m.pt)."""
+    from .perception.detector import Perception
+    return Perception(
+        {"pose": ENV("POSE_MODEL", "models/yolo11n-pose.pt"), "detector": ENV("DET_MODEL", "models/yolo11s.pt")},
+        {"imgsz": int(ENV("POSE_IMGSZ", 640)), "det_imgsz": int(ENV("DET_IMGSZ", 640)), "person_conf": 0.35,
+         "phone_conf": float(ENV("PHONE_CONF", 0.25)), "tracker": "configs/bytetrack.yaml"}, ENV("DAYCARE_DEVICE", "auto"))
+
+
+class PerceptionPool:
+    """Reuse loaded models between live sessions; each session needs its own tracker state."""
+
+    def __init__(self, size: int):
+        self.size = size
+        self.free: list = []
+        self.in_use = 0
+        self.lock = threading.Lock()
+
+    def acquire(self):
+        with self.lock:
+            if self.in_use >= self.size:
+                return None
+            self.in_use += 1
+            p = self.free.pop() if self.free else None
+        if p is None:
+            try:
+                p = make_perception()
+            except Exception:
+                with self.lock:
+                    self.in_use -= 1
+                raise
+        return p
+
+    def release(self, p) -> None:
+        with self.lock:
+            self.in_use -= 1
+            self.free.append(p)
+
+
 class JobManager:
     def __init__(self):
         DATA.mkdir(parents=True, exist_ok=True)
@@ -109,11 +155,7 @@ class JobManager:
     def perception(self):
         with self._plock:
             if self._perception is None:
-                from .perception.detector import Perception
-                self._perception = Perception(
-                    {"pose": ENV("POSE_MODEL", "models/yolo11n-pose.pt"), "detector": ENV("DET_MODEL", "models/yolo11s.pt")},
-                    {"imgsz": 640, "det_imgsz": int(ENV("DET_IMGSZ", 640)), "person_conf": 0.35, "phone_conf": 0.25,
-                     "tracker": "configs/bytetrack.yaml"}, ENV("DAYCARE_DEVICE", "auto"))
+                self._perception = make_perception()
             return self._perception
 
     def submit(self, job: Job) -> int:
@@ -182,6 +224,9 @@ class JobManager:
             for j in list(self.jobs.values()):
                 if time.time() - j.created > JOB_TTL_S and j.status in ("done", "error"):
                     self.delete(j)
+            for d in LIVE_DATA.glob("*"):            # live-session snapshots
+                if d.is_dir() and time.time() - d.stat().st_mtime > JOB_TTL_S:
+                    shutil.rmtree(d, ignore_errors=True)
             for d in DATA.glob("*"):                 # orphans from a previous process
                 if d.is_dir() and time.time() - d.stat().st_mtime > JOB_TTL_S and d.name not in self.jobs:
                     shutil.rmtree(d, ignore_errors=True)
@@ -228,9 +273,62 @@ def create_app() -> FastAPI:
     def root():
         return {"service": "vision-daycare", "version": __version__, "docs": "/docs"}
 
+    pool = PerceptionPool(MAX_LIVE)
+    app.state.pool = pool
+
+    def origin_allowed(origin: str | None) -> bool:
+        return "*" in origins or (origin or "") in origins
+
+    @app.websocket("/ws/live")
+    async def live(ws: WebSocket):
+        """Browser sends JPEG frames (binary) and JSON control messages (text); server answers each frame."""
+        if not origin_allowed(ws.headers.get("origin")):
+            await ws.close(code=1008, reason="origin not allowed")
+            return
+        await ws.accept()
+        q = ws.query_params
+        perception = await asyncio.to_thread(pool.acquire)
+        if perception is None:
+            await ws.send_json({"type": "error", "error": f"server busy: {MAX_LIVE} live cameras already connected"})
+            await ws.close(code=1013)
+            return
+        try:
+            sess = LiveSession(perception, LIVE_DATA, q.get("preset", "quick"), q.get("room") or "Live camera",
+                               role_mode=q.get("roles", "auto"))
+            await ws.send_json({"type": "hello", "session": sess.id, "device": perception.device,
+                                "rules": sess.rules_cfg["rules"]})
+            while True:
+                msg = await ws.receive()
+                if msg.get("type") == "websocket.disconnect":
+                    break
+                if msg.get("bytes") is not None:
+                    try:
+                        out = await asyncio.to_thread(sess.process, msg["bytes"])
+                    except ValueError as e:
+                        out = {"type": "error", "error": str(e)}
+                    await ws.send_text(json.dumps(out))
+                elif msg.get("text"):
+                    try:
+                        await ws.send_json(sess.control(json.loads(msg["text"])))
+                    except (ValueError, KeyError, TypeError) as e:
+                        await ws.send_json({"type": "error", "error": str(e)})
+        except WebSocketDisconnect:
+            pass
+        finally:
+            pool.release(perception)
+
+    @app.get("/api/live/{sid}/snapshots/{n}.jpg")
+    def live_snapshot(sid: str, n: int):
+        if not re.fullmatch(r"[0-9a-f]{12}", sid):
+            raise HTTPException(404, "not found")
+        p = LIVE_DATA / sid / f"{n}.jpg"
+        if not p.exists():
+            raise HTTPException(404, "snapshot not found")
+        return FileResponse(p, media_type="image/jpeg")
+
     @app.get("/api/health")
     def health():
-        return {"ok": True, "queued": mgr.q.qsize(),
+        return {"ok": True, "queued": mgr.q.qsize(), "live_sessions": pool.in_use, "max_live": MAX_LIVE,
                 "busy": any(j.status in ("detecting", "analyzing") for j in mgr.jobs.values())}
 
     @app.get("/api/config")

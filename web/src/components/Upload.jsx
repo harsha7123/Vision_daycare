@@ -8,7 +8,7 @@ const STEPS = [
   ["phone", "The parent is called", "Critical alerts ring the parent and read out what happened."],
 ];
 
-export default function Upload({ onFile, onSample, limits, serverOk }) {
+export default function Upload({ onFile, onSample, onLive, limits, serverOk }) {
   const input = useRef(null);
   const [drag, setDrag] = useState(false);
 
@@ -44,9 +44,15 @@ export default function Upload({ onFile, onSample, limits, serverOk }) {
       </div>
 
       <div className="or-row"><span>or</span></div>
-      <div className="center">
-        <button className="btn large" onClick={onSample}>Watch a sample analysis</button>
-        <p className="muted small">A pre-analysed simulated classroom where every rule is triggered. Works offline.</p>
+      <div className="choice-row">
+        <button className="choice" onClick={onLive}>
+          <span className="step-icon live"><span className="live-dot on" /></span>
+          <span><b>Live camera</b><span className="muted small block">Real-time detection from this laptop's camera. Hold up your phone to test the phone alert.</span></span>
+        </button>
+        <button className="choice" onClick={onSample}>
+          <span className="step-icon"><Icon name="play" size={20} /></span>
+          <span><b>Watch a sample analysis</b><span className="muted small block">A pre-analysed simulated classroom where every rule is triggered. Works offline.</span></span>
+        </button>
       </div>
 
       <ol className="steps">

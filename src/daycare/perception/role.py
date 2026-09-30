@@ -111,7 +111,8 @@ class RoleResolver:
         h = self.height_signal(p, frame.shape[0])
         if h is not None:
             signals.append((h, 0.3))
-        k = self.proportion_signal(p)
+        # head/torso proportions are unreliable on people cut off by the frame (close-up webcams)
+        k = self.proportion_signal(p) if p.xyxy[3] / frame.shape[0] < 0.97 else None
         if k is not None:
             signals.append((k, 0.2))
         if not signals:

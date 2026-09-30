@@ -302,3 +302,18 @@ main { max-width: 1480px; margin: 0 auto; padding: 20px 24px 60px; }
   .alert-card { grid-template-columns: 1fr; }
 }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+
+/* ---------- live ---------- */
+.choice-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 640px) { .choice-row { grid-template-columns: 1fr; } }
+.choice { display: flex; gap: 12px; align-items: flex-start; text-align: left; font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border-strong);
+  border-radius: var(--radius); padding: 14px; cursor: pointer; }
+.choice:hover { border-color: var(--blue); background: #F5F9FE; }
+.step-icon.live { background: var(--red-soft); }
+.live-dot { width: 10px; height: 10px; border-radius: 50%; background: #9AA5B1; display: inline-block; flex: none; }
+.live-dot.on { background: var(--red); animation: blink 1.2s ease-in-out infinite; }
+@keyframes blink { 50% { opacity: .35; } }
+.live-stats { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; font-variant-numeric: tabular-nums; }
+.phone-meter { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center; padding: 10px 14px; border-top: 1px solid var(--border); }
+.stage-notice span { display: block; max-width: 560px; margin: 0 auto; }
+.notice-error { color: #FFCDD2; font-weight: 600; margin-top: 6px !important; }
