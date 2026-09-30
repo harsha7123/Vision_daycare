@@ -32,7 +32,7 @@ async function playWhenVisible(v) {
   await v.play();
 }
 
-export default function Live({ opts, setOpts, onEvent, onCall, calledIds }) {
+export default function Live({ opts, setOpts, onEvent, onCall, calledIds, autoCall, setAutoCall }) {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const wsRef = useRef(null);
@@ -315,10 +315,27 @@ export default function Live({ opts, setOpts, onEvent, onCall, calledIds }) {
             </div>
           </div>
           {live && phoneRec && (
-            <div className="phone-meter">
-              <span className="small"><b>#{phoneRec[0]} phone use</b> {phoneRec[6] >= (r1?.enter ?? 0.6) ? "detected" : "not detected"}</span>
-              <div className="progress"><span style={{ width: `${Math.min(100, (100 * phoneRec[7]) / (r1?.threshold_s || 6))}%`, background: phoneRec[7] > 0 ? "#D84315" : undefined }} /></div>
-              <span className="small">{phoneRec[7].toFixed(0)} / {r1?.threshold_s ?? 6} s</span>
+            <div className="phone-panel">
+              <div className="phone-meter">
+                <span className="small"><b>#{phoneRec[0]} phone use</b>{" "}
+                  <span className={phoneRec[6] >= (r1?.enter ?? 0.6) ? "hot-text" : "muted"}>{phoneRec[6] >= (r1?.enter ?? 0.6) ? "IN USE: timer running" : "not in use"}</span></span>
+                <div className="progress"><span style={{ width: `${Math.min(100, (100 * phoneRec[7]) / (r1?.threshold_s || 6))}%`, background: phoneRec[7] > 0 ? "#D84315" : undefined }} /></div>
+                <span className="small"><b>{phoneRec[7].toFixed(1)}</b> / {r1?.threshold_s ?? 6} s</span>
+              </div>
+              {(() => {
+                const ev = f?.pe?.[String(phoneRec[0])];
+                if (!ev) return null;
+                const tick = (v) => (v >= 0.7 ? "yes" : v > 0 ? "partly" : "no");
+                return (
+                  <div className="evidence small">
+                    <span>Phone seen: <b>{ev.conf ? `${Math.round(ev.conf * 100)}%` : "no"}</b></span>
+                    <span>In hand: <b className={ev.hand >= 0.7 ? "ok-text" : ""}>{tick(ev.hand)}</b></span>
+                    <span>Looking at it: <b className={ev.face >= 0.7 ? "ok-text" : ""}>{tick(ev.face)}</b></span>
+                    <span>Score: <b>{ev.score.toFixed(2)}</b> (needs {r1?.enter ?? 0.6})</span>
+                    <span className="muted">{ev.reason}</span>
+                  </div>
+                );
+              })()}
             </div>
           )}
         </div>
@@ -341,6 +358,17 @@ export default function Live({ opts, setOpts, onEvent, onCall, calledIds }) {
             <span className="track"><span className="knob" /></span>
             <span className="small"><b>Everyone in view is a caretaker</b><span className="muted block">Turn on for laptop-camera tests. Turn off for a classroom camera so children are detected.</span></span>
           </label>
+        </div>
+        <div className="card pad">
+          <h2>When an alert fires</h2>
+          <p className="muted small">You always get a banner, a sound and a snapshot. Choose which alerts also call the parent (set the contact under Contacts & calling).</p>
+          {[["high", "Caretaker on phone (high)"], ["critical", "Children unattended / child fell (critical)"], ["medium", "Other (medium)"]].map(([p, label]) => (
+            <label key={p} className="switch" style={{ marginTop: 8 }}>
+              <input type="checkbox" checked={!!autoCall?.[p]} onChange={(e) => setAutoCall({ ...autoCall, [p]: e.target.checked })} />
+              <span className="track"><span className="knob" /></span>
+              <span className="small">Call parent: {label}</span>
+            </label>
+          ))}
         </div>
         <div className="card">
           <div className="section-title pad-x" style={{ paddingTop: 14 }}><h2>People in view</h2></div>

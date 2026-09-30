@@ -333,7 +333,8 @@ export default function App() {
 
       <main>
         {stage === "upload" && <Upload onFile={onFile} onSample={onSample} onLive={() => setStage("live")} limits={serverCfg?.limits} serverOk={serverOk} />}
-        {stage === "live" && <Live opts={opts} setOpts={setOpts} onEvent={onLiveEvent} onCall={startCall} calledIds={called} />}
+        {stage === "live" && <Live opts={opts} setOpts={setOpts} onEvent={onLiveEvent} onCall={startCall} calledIds={called}
+          autoCall={settings.autoCall} setAutoCall={(a) => setSettings((st) => ({ ...st, autoCall: a }))} />}
 
         {(stage === "setup" || stage === "processing") && (
           <div className="layout">

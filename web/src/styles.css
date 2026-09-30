@@ -314,7 +314,10 @@ main { max-width: 1480px; margin: 0 auto; padding: 20px 24px 60px; }
 .live-dot.on { background: var(--red); animation: blink 1.2s ease-in-out infinite; }
 @keyframes blink { 50% { opacity: .35; } }
 .live-stats { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; font-variant-numeric: tabular-nums; }
-.phone-meter { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center; padding: 10px 14px; border-top: 1px solid var(--border); }
+.phone-panel { border-top: 1px solid var(--border); padding: 10px 14px; display: grid; gap: 6px; }
+.phone-meter { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center; }
+.evidence { display: flex; gap: 16px; flex-wrap: wrap; }
+.hot-text { color: #D84315; font-weight: 700; }
 .stage-notice span { display: block; max-width: 560px; margin: 0 auto; }
 .notice-error { color: #FFCDD2; font-weight: 600; margin-top: 6px !important; }
 

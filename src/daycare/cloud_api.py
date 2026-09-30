@@ -323,6 +323,9 @@ def create_app() -> FastAPI:
                         await ws.send_json({"type": "error", "error": str(e)})
         except WebSocketDisconnect:
             pass
+        except Exception as e:                  # browser closed mid-send (Stop / tab closed): not an error
+            if "close" not in type(e).__name__.lower() and "closed" not in str(e).lower():
+                log.exception("live session error")
         finally:
             pool.release(perception)
 

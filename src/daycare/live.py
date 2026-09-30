@@ -96,6 +96,7 @@ class LiveSession:
             "type": "frame", "w": w, "h": h, "t": round(now - self.started, 2),
             "p": recs, "k": kps, "ph": [[*[int(v) for v in ph.xyxy], round(ph.conf, 2)] for ph in phones],
             "c": [c["children"], c["adults"]], "u": round(eng.unattended_t, 1),
+            "pe": {str(p.track_id): self.analyzer.phone_debug.get(p.track_id) for p in persons},
             "events": new_events,
             "tracks": [{"track_id": s.track_id, "role": s.role, "p_child": round(s.p_child, 2),
                         "override": self.analyzer.roles.overrides.get(s.track_id)}
