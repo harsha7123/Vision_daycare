@@ -9,10 +9,19 @@ export function PriorityTag({ p }) {
 }
 
 /* ------------------------------------------------------------------ alerts */
-export function AlertsPanel({ events, time, focusId, acked, calledIds, onJump, onCall, onAck }) {
+export function AlertsPanel({ events, time, focusId, acked, calledIds, onJump, onCall, onAck, noPeople }) {
   const [filter, setFilter] = useState("all");
   const shown = events.filter((e) => filter === "all" || e.priority === filter);
   const counts = Object.fromEntries(PRIORITY_ORDER.map((p) => [p, events.filter((e) => e.priority === p).length]));
+  if (!events.length && noPeople) {
+    return (
+      <div className="empty-state">
+        <div className="empty-icon" style={{ background: "#FFF6DC", color: "#A86B00" }}><Icon name="alert" size={28} /></div>
+        <h3>No people detected</h3>
+        <p>The AI works on real camera footage. Cartoon or animated videos, drawings and very dark or blurry shots can't be analysed.</p>
+      </div>
+    );
+  }
   if (!events.length) {
     return (
       <div className="empty-state">

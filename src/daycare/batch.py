@@ -240,7 +240,13 @@ def analyze(det: Detections, rules_cfg: dict, zones: list[dict] | None = None, r
         "max_adults_in_zone": max((f["c"][1] for f in frames), default=0),
         "events": len(events), "by_priority": by_prio,
         "worst": next((p for p in ("critical", "high", "medium", "low") if by_prio.get(p)), None),
+        "frames_with_people": round(sum(1 for f in frames if f["p"]) / max(len(frames), 1), 2),
     }
+    # Tell the user when the AI could not see people, instead of a misleading "no issues found".
+    if not counted:
+        summary["warning"] = "no_people"
+    elif summary["frames_with_people"] < 0.25:
+        summary["warning"] = "few_people"
     return {
         "video": {"width": det.width, "height": det.height, "duration": round(det.duration, 2),
                   "sample_fps": round(det.sample_fps, 2), "src_fps": round(det.src_fps, 2)},

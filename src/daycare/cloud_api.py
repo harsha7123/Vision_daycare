@@ -6,7 +6,8 @@ Deploy free:    Hugging Face Spaces (Docker) - see deploy/huggingface/
 
 Environment:
   ALLOWED_ORIGINS        comma-separated CORS origins (e.g. https://vision-daycare.vercel.app); default *
-  MAX_UPLOAD_MB          default 150          MAX_VIDEO_S   default 300
+  MAX_UPLOAD_MB          default 500          MAX_VIDEO_S   default 1800 (30 min)
+  MAX_FRAMES             default 3600: frames analysed per video; long videos sample at a lower fps
   SAMPLE_FPS             default 6            JOB_TTL_S     default 3600 (uploads + results deleted after)
   JOBS_PER_HOUR          per-IP upload limit, default 8
   DAYCARE_DEVICE         auto | cpu | cuda:0
@@ -42,8 +43,9 @@ load_dotenv()
 log = logging.getLogger("daycare.cloud")
 
 ENV = os.environ.get
-MAX_UPLOAD_MB = float(ENV("MAX_UPLOAD_MB", 150))
-MAX_VIDEO_S = float(ENV("MAX_VIDEO_S", 300))
+MAX_UPLOAD_MB = float(ENV("MAX_UPLOAD_MB", 500))
+MAX_VIDEO_S = float(ENV("MAX_VIDEO_S", 1800))
+MAX_FRAMES = int(ENV("MAX_FRAMES", 3600))     # long videos are sampled more sparsely (never below 2 fps)
 SAMPLE_FPS = float(ENV("SAMPLE_FPS", 6))
 JOB_TTL_S = float(ENV("JOB_TTL_S", 3600))
 JOBS_PER_HOUR = int(ENV("JOBS_PER_HOUR", 8))
@@ -159,7 +161,9 @@ class JobManager:
             try:
                 job.status = "detecting"
                 preview = job.dir / "preview.webm" if job.options.get("preview") else None
-                job.det = detect(job.video, self.perception, SAMPLE_FPS,
+                dur = job.meta.get("duration") or 0
+                fps = max(2.0, min(SAMPLE_FPS, MAX_FRAMES / dur)) if dur else SAMPLE_FPS
+                job.det = detect(job.video, self.perception, fps,
                                  progress=lambda p: setattr(job, "progress", p * 0.9),
                                  cancelled=lambda: job.id not in self.jobs, preview=preview)
                 job.calibration = estimate_calibration(job.det)

@@ -396,15 +396,28 @@ export default function App() {
         {stage === "review" && result && (
           <div className="layout">
             <div className="main-col">
+              {summary.warning && (
+                <div className="warn-card" role="status">
+                  <Icon name="alert" size={22} />
+                  <div>
+                    <b>{summary.warning === "no_people" ? "The AI could not see any people in this video" : "The AI could see people in only a few frames"}</b>
+                    <p className="small">
+                      Detection works on real camera footage of real people. Cartoons, animations, drawings, screen recordings and very dark,
+                      blurry or distant shots are not recognised, so no rule can fire. Try real CCTV or phone footage in which people are seen head to feet.
+                      {summary.warning === "few_people" && " People were found in only " + Math.round(summary.frames_with_people * 100) + "% of the frames, so alerts may be missed."}
+                    </p>
+                  </div>
+                </div>
+              )}
               <div className="summary">
-                <div className="verdict" style={worst ? { background: PRIORITY[worst].bg, borderColor: PRIORITY[worst].border, color: PRIORITY[worst].color } : undefined}>
+                <div className="verdict" style={!worst && summary.warning === "no_people" ? { background: "#ECEFF1", borderColor: "#CFD8DC", color: "#455A64" } : worst ? { background: PRIORITY[worst].bg, borderColor: PRIORITY[worst].border, color: PRIORITY[worst].color } : undefined}>
                   <Icon name={worst ? "alert" : "shield"} size={26} />
                   <div>
                     <div className="verdict-title">
-                      {worst ? `${result.events.length} situation${result.events.length > 1 ? "s" : ""} flagged` : "No safety issues found"}
+                      {worst ? `${result.events.length} situation${result.events.length > 1 ? "s" : ""} flagged` : summary.warning === "no_people" ? "Nothing could be checked" : "No safety issues found"}
                     </div>
                     <div className="small">
-                      {worst ? PRIORITY_ORDER.filter((p) => summary.by_priority[p]).map((p) => `${summary.by_priority[p]} ${PRIORITY[p].label.toLowerCase()}`).join(" · ") : "Every rule stayed below its threshold."}
+                      {worst ? PRIORITY_ORDER.filter((p) => summary.by_priority[p]).map((p) => `${summary.by_priority[p]} ${PRIORITY[p].label.toLowerCase()}`).join(" · ") : summary.warning === "no_people" ? "No people were detected." : "Every rule stayed below its threshold."}
                     </div>
                   </div>
                 </div>
@@ -450,7 +463,7 @@ export default function App() {
                 </div>
                 {tab === "alerts" && (
                   <AlertsPanel events={sorted} time={time} focusId={focusId} acked={acked} calledIds={called}
-                    onJump={jump} onCall={startCall} onAck={toggleAck} />
+                    onJump={jump} onCall={startCall} onAck={toggleAck} noPeople={summary.warning === "no_people"} />
                 )}
                 {tab === "people" && (
                   <PeoplePanel tracks={result.tracks} overrides={roleOv} setOverrides={setRoleOv} selected={selected}

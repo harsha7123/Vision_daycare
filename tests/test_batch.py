@@ -132,3 +132,11 @@ def test_notify_requires_twilio_and_allowlist(client, monkeypatch):
     monkeypatch.setenv("ALLOWED_CALL_NUMBERS", "+911111111111")
     assert client.post("/api/notify/call", json=body).status_code == 403          # not allowlisted
     assert client.post("/api/notify/call", json={**body, "to": "98765"}).status_code == 422
+
+
+def test_warns_when_no_people_are_detected():
+    empty = Detections(W, H, 6, 10, 6, [(i / 6, i, [], []) for i in range(60)])
+    res = analyze(empty, build_rules("quick"))
+    assert res["events"] == [] and res["summary"]["warning"] == "no_people"
+    ok = analyze(sim_detections(seconds=10), build_rules("quick"))
+    assert "warning" not in ok["summary"]
