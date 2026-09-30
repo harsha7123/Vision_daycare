@@ -3,6 +3,7 @@ import { absUrl, getApiUrl } from "../lib/api";
 import { PRESETS, PRIORITY, ROLE, RULES, fmtTime } from "../lib/constants";
 import { contentRect, drawFrame } from "../lib/overlay";
 import { Icon } from "./Controls";
+import LatencyReport, { buildReport } from "./LatencyReport";
 import { PriorityTag } from "./Panels";
 
 const SEND_WIDTH = 960;       // frames are resized to this width before upload (enough for phones at desk distance)
@@ -51,6 +52,9 @@ export default function Live({ opts, setOpts, onEvent, onCall, calledIds }) {
   const [rules, setRules] = useState(null);
   const [now, setNow] = useState(0);
   const fileInput = useRef(null);
+  // per-frame timings for the latency report
+  const metrics = useRef({ frames: [], alerts: [], phoneStart: {}, hello: null, source: "", resolution: "" });
+  const [report, setReport] = useState(null);
   const onEventRef = useRef(onEvent);
   onEventRef.current = onEvent;
 
@@ -69,6 +73,10 @@ export default function Live({ opts, setOpts, onEvent, onCall, calledIds }) {
           const r = contentRect(v, c);
           const scale = dpr * Math.max(0.85, Math.min(1.4, r.w / dpr / 900));
           drawFrame(ctx, v, r, scale, f, f.w, f.h, { ...opts, roleOverrides: overrides });
+          if (f.metric && f.metric.render == null) {          // first time this answer reaches the screen
+            f.metric.render = performance.now() - f.at;
+            f.metric.e2e = f.metric.capturedToReply + f.metric.render;
+          }
         }
       }
       raf = requestAnimationFrame(tick);
@@ -85,6 +93,7 @@ export default function Live({ opts, setOpts, onEvent, onCall, calledIds }) {
     const due = performance.now() - L.last >= 1000 / MAX_FPS;
     if (v && ws?.readyState === 1 && !L.inflight && due && v.readyState >= 2 && v.videoWidth) {
       const w = Math.min(SEND_WIDTH, v.videoWidth), h = Math.round((v.videoHeight * w) / v.videoWidth);
+      const capturedAt = performance.now();
       L.canvas = L.canvas || document.createElement("canvas");
       L.canvas.width = w; L.canvas.height = h;
       L.canvas.getContext("2d").drawImage(v, 0, 0, w, h);
@@ -93,6 +102,8 @@ export default function Live({ opts, setOpts, onEvent, onCall, calledIds }) {
       const blob = await new Promise((res) => L.canvas.toBlob(res, "image/jpeg", 0.72));
       if (blob && ws.readyState === 1) {
         L.sentAt = performance.now();
+        L.capturedAt = capturedAt;
+        L.encode = L.sentAt - capturedAt;
         ws.send(await blob.arrayBuffer());
       } else L.inflight = false;
     }
@@ -104,15 +115,34 @@ export default function Live({ opts, setOpts, onEvent, onCall, calledIds }) {
   const onMessage = useCallback((ev) => {
     const L = loop.current;
     const m = JSON.parse(ev.data);
-    if (m.type === "hello") { setDevice(m.device); setRules(m.rules); setStatus("live"); return; }
-    if (m.type === "ack" && m.rules) { setRules(m.rules); return; }
+    if (m.type === "hello") {
+      setDevice(m.gpu ? `${m.device}, ${m.gpu}` : m.device); setRules(m.rules); setStatus("live");
+      metrics.current.hello = { device: m.device, gpu: m.gpu, models: m.models };
+      metrics.current.rules = m.rules;
+      return;
+    }
+    if (m.type === "ack" && m.rules) { setRules(m.rules); metrics.current.rules = m.rules; return; }
     if (m.type === "error") { setError(m.error); L.inflight = false; return; }
     if (m.type !== "frame") return;
     L.inflight = false;
-    const wait = Math.max(0, 1000 / MAX_FPS - (performance.now() - L.last));
-    setTimeout(() => pumpRef.current(), wait);        // send the next frame as soon as this one is answered
-    const rtt = performance.now() - L.sentAt;
-    latest.current = { ...m, at: performance.now() };
+    // send the next frame as soon as this one is answered (no timer when we are already late:
+    // background windows slow timers down to ~1 per second)
+    const wait = 1000 / MAX_FPS - (performance.now() - L.last);
+    if (wait <= 1) pumpRef.current(); else setTimeout(() => pumpRef.current(), wait);
+    const t = performance.now();
+    const rtt = t - L.sentAt;
+    const M = metrics.current;
+    const metric = { at: t, encode: L.encode, rtt, network: Math.max(0, rtt - m.ms.total), decode: m.ms.decode, infer: m.ms.infer,
+      other: Math.max(0, m.ms.total - m.ms.decode - m.ms.infer), capturedToReply: t - L.capturedAt, render: null, e2e: null, people: m.p.length };
+    M.frames.push(metric);
+    if (M.frames.length > 20000) M.frames.shift();
+    M.resolution = `${m.w}x${m.h}`;
+    // when did each adult's phone use start (for "detected -> alert" timing)?
+    for (const p of m.p) {
+      if (p[7] > 0 && M.phoneStart[p[0]] == null) M.phoneStart[p[0]] = Date.now() - p[7] * 1000;
+      if (p[7] === 0 && p[6] < 0.2) delete M.phoneStart[p[0]];
+    }
+    latest.current = { ...m, at: t, metric };
     L.frames += 1;
     if (performance.now() - L.fpsT > 1000) {
       setStats({ rtt: Math.round(rtt), infer: m.ms.infer, server: m.ms.total, fps: (L.frames * 1000) / (performance.now() - L.fpsT), size: `${m.w}x${m.h}` });
@@ -123,6 +153,10 @@ export default function Live({ opts, setOpts, onEvent, onCall, calledIds }) {
     setNow(m.t);
     for (const e of m.events) {
       const full = { ...e, room: e.room || "Live camera" };
+      const start = e.rule === "R1_phone_use" ? M.phoneStart[e.track_id] : Date.now() - e.duration_s * 1000;
+      M.alerts.push({ at: Date.now(), rule: e.rule, priority: e.priority, track_id: e.track_id,
+        threshold_s: M.rules?.[e.rule]?.threshold_s, from_detection_s: start ? (Date.now() - start) / 1000 : null,
+        system_ms: Math.round(t - L.capturedAt) });
       setEvents((es) => [full, ...es].slice(0, 50));
       onEventRef.current?.(full);
     }
@@ -139,6 +173,7 @@ export default function Live({ opts, setOpts, onEvent, onCall, calledIds }) {
     if (v) { v.pause(); v.srcObject = null; }
     latest.current = null;
     setStatus("idle");
+    if (metrics.current.frames.length >= 20) setReport(buildReport(metrics.current));
   }, []);
   useEffect(() => stop, [stop]);
 
@@ -162,6 +197,8 @@ export default function Live({ opts, setOpts, onEvent, onCall, calledIds }) {
   const start = async (file) => {
     setError("");
     setEvents([]);
+    setReport(null);
+    metrics.current = { frames: [], alerts: [], phoneStart: {}, hello: null, rules: null, source: file ? `video file (${file.name})` : "laptop camera", resolution: "" };
     setOverrides({});
     setStatus("starting");
     const v = videoRef.current;
@@ -226,6 +263,7 @@ export default function Live({ opts, setOpts, onEvent, onCall, calledIds }) {
                     <button className={source === "camera" ? "on" : ""} onClick={() => setSource("camera")}>Laptop camera</button>
                     <button className={source === "file" ? "on" : ""} onClick={() => setSource("file")}>Video file as camera</button>
                   </div>
+                  {status === "starting" && <span className="muted small">Connecting... the first start loads the AI models onto the GPU (up to ~30 s)</span>}
                   <button className="btn primary" disabled={status === "starting"}
                     onClick={() => (source === "file" ? fileInput.current.click() : start())}>
                     {status === "starting" ? "Starting..." : "Start live analysis"}
@@ -233,7 +271,10 @@ export default function Live({ opts, setOpts, onEvent, onCall, calledIds }) {
                   <input ref={fileInput} type="file" accept="video/*" hidden onChange={(e) => e.target.files[0] && start(e.target.files[0])} />
                 </>
               ) : (
-                <button className="btn hangup" onClick={stop}>Stop</button>
+                <>
+                  <button className="btn" onClick={() => setReport(buildReport(metrics.current))}>Latency report</button>
+                  <button className="btn hangup" onClick={stop}>Stop</button>
+                </>
               )}
             </div>
           </div>
@@ -283,6 +324,9 @@ export default function Live({ opts, setOpts, onEvent, onCall, calledIds }) {
         </div>
       </div>
 
+      {report && <LatencyReport report={report} onClose={() => setReport(null)}
+        framesCsv={["t_ms,encode_ms,network_ms,decode_ms,ai_ms,rules_ms,render_ms,end_to_end_ms,people",
+          ...metrics.current.frames.filter((x) => x.render != null).map((x) => [Math.round(x.at), x.encode, x.network, x.decode, x.infer, x.other, x.render, x.e2e, x.people].map((v) => Math.round(v)).join(","))].join(String.fromCharCode(10))} />}
       <aside className="side-col">
         <div className="card pad">
           <h2>Sensitivity</h2>

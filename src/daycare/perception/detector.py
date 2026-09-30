@@ -1,6 +1,8 @@
 """YOLO pose + ByteTrack for people, YOLO detect for phones (COCO class 67)."""
 from __future__ import annotations
 
+import logging
+
 import numpy as np
 
 from ..config import resolve
@@ -22,6 +24,8 @@ def pick_device(pref: str = "auto") -> str:
 class Perception:
     def __init__(self, models: dict, pcfg: dict, device: str = "auto"):
         from ultralytics import YOLO   # heavy import kept local so rules/tests don't need torch
+        from ultralytics.utils import LOGGER
+        LOGGER.setLevel(logging.ERROR)  # newer Ultralytics warns about `half` on every frame
         import supervision as sv
         self._sv = sv
         self.device = pick_device(device)

@@ -17,3 +17,6 @@ models/*
 *.pt
 *.engine
 *.onnx
+
+# latency reports from tools/latency_benchmark.py
+reports/

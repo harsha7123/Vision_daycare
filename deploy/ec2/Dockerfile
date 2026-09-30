@@ -12,7 +12,7 @@ COPY run_cloud.py .
 # Bigger models than the free CPU host: better keypoints and much better small-phone detection.
 ENV POSE_MODEL=models/yolo11s-pose.pt DET_MODEL=models/yolo11m.pt \
     DAYCARE_DATA_DIR=/data YOLO_CONFIG_DIR=/tmp/Ultralytics PYTHONUNBUFFERED=1 PORT=7860
-RUN mkdir -p models && python -c "from ultralytics import YOLO; YOLO('models/yolo11s-pose.pt'); YOLO('models/yolo11m.pt')"
+RUN mkdir -p models && for i in 1 2 3 4 5; do       python -c "from ultralytics import YOLO; YOLO('models/yolo11s-pose.pt'); YOLO('models/yolo11m.pt')" && break;       echo "weights download failed, retrying"; sleep 10; done && test -s models/yolo11m.pt
 
 EXPOSE 7860
 HEALTHCHECK --interval=30s --timeout=5s CMD python -c "import urllib.request;urllib.request.urlopen('http://localhost:7860/api/health')" || exit 1

@@ -59,6 +59,27 @@ python run_cloud.py                  # API on http://localhost:7860/docs
 cd web && npm install && npm run dev # UI on http://localhost:5173
 ```
 
+### Test live on your own laptop (NVIDIA GPU) and get a latency report
+
+1. Install the CUDA build of PyTorch, since the default one is CPU-only:
+   `pip install --force-reinstall --no-deps torch torchvision --index-url https://download.pytorch.org/whl/cu126`
+   and check with `python -c "import torch; print(torch.cuda.get_device_name(0))"`.
+2. **Plug the laptop in** and set Windows power mode to **Best performance**. On battery, laptop GPUs are throttled, and we measured them running about 2x slower.
+3. Double-click **`run_live_local.bat`** (the first run builds the web app, which needs Node.js). It opens `http://localhost:7860`. Choose **Live camera**, then **Start live analysis**, then allow the camera. Hold a phone and look at it: the phone meter fills and the alert fires after 6 s.
+4. Click **Latency report**, or just press **Stop**, to see the median and p95 delay, the time per step, and how long each alert took. You can download it as JSON or CSV, or print it to PDF.
+
+Command-line alternative (camera 0, 30 s, writes `reports/latency-report-*.html`):
+```bash
+python tools/latency_benchmark.py --source 0 --seconds 30
+```
+
+Measured on an RTX 3050 Laptop GPU **on battery** (960 px frames, local server):
+
+| Models | End to end (median / p95) | AI per frame | fps |
+|---|---|---|---|
+| yolo11n-pose + yolo11s (default) | 92 / 102 ms | 86 ms | 10.7 |
+| yolo11s-pose + yolo11m (`run_live_local.bat accurate`) | 168 / 173 ms | 162 ms | 6.0 |
+
 ---
 
 ## 2. Architecture

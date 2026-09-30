@@ -269,9 +269,11 @@ def create_app() -> FastAPI:
         fwd = req.headers.get("x-forwarded-for")
         return fwd.split(",")[0].strip() if fwd else (req.client.host if req.client else "?")
 
-    @app.get("/")
-    def root():
-        return {"service": "vision-daycare", "version": __version__, "docs": "/docs"}
+    web_dist = resolve("web/dist")
+    if not (web_dist / "index.html").exists():
+        @app.get("/")
+        def root():
+            return {"service": "vision-daycare", "version": __version__, "docs": "/docs"}
 
     pool = PerceptionPool(MAX_LIVE)
     app.state.pool = pool
@@ -287,7 +289,13 @@ def create_app() -> FastAPI:
             return
         await ws.accept()
         q = ws.query_params
-        perception = await asyncio.to_thread(pool.acquire)
+        try:
+            perception = await asyncio.to_thread(pool.acquire)
+        except Exception as e:                      # e.g. model weights could not be downloaded
+            log.exception("live: loading models failed")
+            await ws.send_json({"type": "error", "error": f"The server could not load the AI models: {e}"})
+            await ws.close(code=1011)
+            return
         if perception is None:
             await ws.send_json({"type": "error", "error": f"server busy: {MAX_LIVE} live cameras already connected"})
             await ws.close(code=1013)
@@ -295,7 +303,8 @@ def create_app() -> FastAPI:
         try:
             sess = LiveSession(perception, LIVE_DATA, q.get("preset", "quick"), q.get("room") or "Live camera",
                                role_mode=q.get("roles", "auto"))
-            await ws.send_json({"type": "hello", "session": sess.id, "device": perception.device,
+            await ws.send_json({"type": "hello", "session": sess.id, "device": perception.device, "gpu": gpu_name(),
+                                "models": {"pose": ENV("POSE_MODEL", "models/yolo11n-pose.pt"), "detector": ENV("DET_MODEL", "models/yolo11s.pt")},
                                 "rules": sess.rules_cfg["rules"]})
             while True:
                 msg = await ws.receive()
@@ -443,5 +452,17 @@ def create_app() -> FastAPI:
         r = twilio_post("Messages", {"To": body.to, "From": ENV("TWILIO_FROM_NUMBER"), "Body": body.message})
         return {"mode": "twilio", "sid": r.get("sid"), "status": r.get("status")}
 
+    # Serve the built web app (web/dist) from the same port for single-command local use:
+    # python run_cloud.py -> http://localhost:7860 (localhost counts as secure, so the camera works).
+    if (web_dist / "index.html").exists():
+        from fastapi.staticfiles import StaticFiles
+        app.mount("/", StaticFiles(directory=web_dist, html=True), name="web")
     return app
 
+
+def gpu_name() -> str | None:
+    try:
+        import torch
+        return torch.cuda.get_device_name(0) if torch.cuda.is_available() else None
+    except Exception:
+        return None
